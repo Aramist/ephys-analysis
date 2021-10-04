@@ -11,10 +11,10 @@ from scipy.signal import butter, sosfilt, sosfreqz
 import seaborn as sns
 
 
-log_ctx = open('log.txt', 'w')
 
 def log(line):
-    log_ctx.write(str(line) + '\n')
+    with open('log.txt', 'a') as ctx:
+        log_ctx.write(str(line) + '\n')
 
 
 def timed(fn):
