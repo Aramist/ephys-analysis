@@ -38,7 +38,7 @@ def timed(fn):
                     end_time_str,
                     fn.__name__,
                     calling_function,
-                    duration_minutes,
+                    int(duration_minutes),
                     int(duration_seconds)
             )
         else:
