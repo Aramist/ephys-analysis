@@ -51,6 +51,8 @@ def timed(fn):
             )
         log(fmt)
         print(fmt)
+        return results
+    return wrapper
 
 
 @timed
