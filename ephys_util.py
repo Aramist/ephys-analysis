@@ -13,7 +13,7 @@ import seaborn as sns
 
 
 def log(line):
-    with open('log.txt', 'a') as ctx:
+    with open('log.txt', 'a') as log_ctx:
         log_ctx.write(str(line) + '\n')
 
 
@@ -33,7 +33,7 @@ def timed(fn):
         duration_minutes = duration // 60
         duration_seconds = duration - duration_minutes * 60
         if duration_minutes > 0:
-            fmt = '{}- Function {}, called by {}, executed in {}:{}'
+            fmt = '{}- Function {}, called by {}, executed in {}:{:0>2d}'
             fmt = fmt.format(
                     end_time_str,
                     fn.__name__,
@@ -42,7 +42,7 @@ def timed(fn):
                     int(duration_seconds)
             )
         else:
-            fmt = '{}- Function {}, called by {}, executed in {}s'
+            fmt = '{}- Function {}, called by {}, executed in {:.3f}s'
             fmt = fmt.format(
                     end_time_str,
                     fn.__name__,
@@ -253,6 +253,7 @@ def get_spikes(data_ephys, threshold = 4):
 
 	return np.array(spikes, dtype=object)
 
+@timed
 def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500):
 
 	"""
@@ -276,6 +277,7 @@ def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phy
 
 	return np.array(spikes_trunc, dtype=object)
 
+@timed
 def psth(spikes,data_audio, onset_s, offset_s, ephys_trigger,
 	pad = 1, hist_binsize=0.05, sr_audio=125000, sr_phys=12500, spec_clim=(-100,-70)):
 
