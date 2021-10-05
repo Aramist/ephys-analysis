@@ -259,7 +259,7 @@ def get_spikes(data_ephys, threshold = 4):
     return np.array(spikes, dtype=object)
 
 @timed
-def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500):
+def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500, n_channels=64):
 
     """
     Parameters:
@@ -277,12 +277,18 @@ def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phy
     spikes_trunc = []
 
     # TODO: replace len(spikes) with n_channels for clarity?
-    for i in range(len(spikes)):  # TODO: make this run in O(mlog(N))
-        working_spikes_trunc = np.array([s for s in spikes[i] if onset_phys <= s <= offset_phys])-onset_phys
+    for i in range(n_channels):  # TODO: make this run in O(mlog(N))
+        # Assume spikes[i] is ordered
+        start_idx = spikes[i].searchsorted(onset_phys)
+        end_idx = spikes[i].searchsorted(offset_phys, side='right')
+        if end_idx > start_idx and spikes[i][end_idx] > offset_phys:
+            end_idx -= 1
+
+        working_spikes_trunc = spikes[i][start_idx:end_idx] - onset_phys
         spikes_trunc.append(working_spikes_trunc)
 
     # TODO: next benchmark, replace obj ndarray with list of ndarray
-    return np.array(spikes_trunc, dtype=object)
+    return spikes_trunc
 
 @timed
 def psth(spikes,data_audio, onset_s, offset_s, ephys_trigger,
@@ -325,7 +331,7 @@ def psth(spikes,data_audio, onset_s, offset_s, ephys_trigger,
 
     plt.subplot(413)
 
-    plt.hist(np.hstack(np.array(spikes_trunc)), range=(0, (offset-onset)*sr_phys),
+    plt.hist(np.hstack(spikes_trunc), range=(0, (offset-onset)*sr_phys),
                  bins=int(len(audio)/int(hist_binsize*sr_audio)), histtype='step', color='k')
     plt.xticks([])
     plt.ylabel('counts \n ({} s bin)'.format(hist_binsize), rotation=0, labelpad=40, fontsize=14)
@@ -377,10 +383,19 @@ def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
     #all_audio_mean = np.mean(np.array(all_audio), axis=0)
     psth_traces = []
 
+    # all_spikes: list of n_onsets lists of 64 ndarrays of dim (n_spikes)
+    # basically (n_onsets, 64, n_spikes)
+    # want to reshape to (64, n_onsets, n_spikes)
+    reshaped_data = list()
+    for i in range(n_channels):
+        element = [onset_trunc_spikes[i] for onset_trunc_spikes in all_spikes]  # len 'n_onsets' list of ndarrays (n_spikes,)
+        reshaped_data.append(element)
+
     for i in range(n_channels):
         # For clarification, ch is staggered with dimensions (n_onsets, n_channels, n_spikes)
         # All spikes is a python list of len n_onsets, containing staggered ndarrays of dim (n_channels, n_spikes)
-        ch = np.vstack(all_spikes)[:,i]  # I believe this returns a matrix of spike locations for a single channel across all presentations
+        # ch = np.vstack(all_spikes)[:,i]  # I believe this returns a matrix of spike locations for a single channel across all presentations
+        ch = reshaped_data[i]
 
         plt.figure(figsize=(12,10))
 
