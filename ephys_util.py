@@ -98,8 +98,11 @@ def load_wm(filename):
     #parse filename to get number of channels
     n_channels = int(filename.split('_')[-2][:-2])
 
-    #load in binary data
-    _data = np.fromfile(filename,'int16', offset=8)
+    @timed
+    def io_fromfile():
+        #load in binary data
+        return np.fromfile(filename,'int16', offset=8)
+    _data = io_fromfile()
 
     #reshape data to (n_channels, n_samples) and scale values to MICROVOLTS
     # Transpose to row-major indexing
@@ -473,7 +476,10 @@ def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
         if hide_plot == True:
             plt.close()
 
-    np.save(os.path.join(savedir, 'psth_traces{}.npy'.format(outname)), np.array(psth_traces))
+    @timed
+    def io_save_psth_traces():
+        np.save(os.path.join(savedir, 'psth_traces{}.npy'.format(outname)), np.array(psth_traces))
+    io_save_psth_traces()
 
 
 @timed
@@ -530,23 +536,23 @@ def load_data_new(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
     #load white matter data and check for bandpass argument...may take a while
     if phys_bandpass == False:
         print('Loading physiology data...')
-        sr_phys, _data_phys = load_wm(wm_file)
+        sr_phys, data_phys = load_wm(wm_file)
         print('No bandpass filtering.')
         print('Computing mean signal across all channels...')
-        data_phys_mean = np.mean(_data_phys, axis=1)
+        data_phys_mean = np.mean(data_phys, axis=0)
         print('Subtracting mean signal across all channels...')
-        data_phys = _data_phys - np.tile(data_phys_mean, (_data_phys.shape[1], 1)).T
+        data_phys = data_phys - data_phys_mean.reshape((1, -1))
         print()
 
     else:
         print('Loading physiology data...')
-        sr_phys, _data_phys = load_wm(wm_file)
+        sr_phys, data_phys = load_wm(wm_file)
         print('Bandpassing from {}-{} Hz...'.format(phys_bandpass[0], phys_bandpass[1]))
-        data_phys_filt = butter_bandpass_filter(_data_phys, phys_bandpass[0], phys_bandpass[1], sr_phys)
+        data_phys_filt = butter_bandpass_filter(data_phys, phys_bandpass[0], phys_bandpass[1], sr_phys)
         print('Computing mean signal across all channels...')
-        data_phys_mean = np.mean(data_phys_filt, axis=1)
+        data_phys_mean = np.mean(data_phys_filt, axis=0)
         print('Subtracting mean signal across all channels...')
-        data_phys = data_phys_filt - np.tile(data_phys_mean, (_data_phys.shape[1], 1)).T
+        data_phys = data_phys_filt - data_phys_mean.reshape((1, -1))
         print()
 
     #load and truncate audio data
@@ -601,28 +607,26 @@ def truncate_audio_new(analog_file, data_phys, combine_audio = False):
     sampling_rate_ratio = 10
     end_trunc = (len(data_phys)*sampling_rate_ratio)
 
+    _mic1 = data_analog['ai_channels']['ai0']
+    @timed
+    def io_mic1():
+        return _mic1[ephys_trigger:ephys_trigger+end_trunc]
+    mic1 = io_mic1()
+
+    _mic2 = data_analog['ai_channels']['ai1']
+    @timed
+    def io_mic2():
+        return _mic2[ephys_trigger:ephys_trigger+end_trunc]
+    mic2 = io_mic2()
+
+    data_analog.close()
+
     if combine_audio == True:
-        _mic1 = data_analog['ai_channels']['ai0']
-        mic1 = _mic1[ephys_trigger:ephys_trigger+end_trunc]
-
-        _mic2 = data_analog['ai_channels']['ai1']
-        mic2 = _mic2[ephys_trigger:ephys_trigger+end_trunc]
-
         audio = 0.5 * (mic1 + mic2)
-
         return np.array([audio]), ephys_trigger
 
     else:
-        _mic1 = data_analog['ai_channels']['ai0']
-        mic1 = _mic1[ephys_trigger:ephys_trigger+end_trunc]
-
-        _mic2 = data_analog['ai_channels']['ai1']
-        mic2 = _mic2[ephys_trigger:ephys_trigger+end_trunc]
-
         return np.stack((mic1, mic2), axis=0), ephys_trigger
-
-
-    data_analog.close()
 
 
 @timed
