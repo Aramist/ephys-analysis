@@ -5,6 +5,8 @@ with open('log.txt', 'r') as ctx:
     lines = [a[:-1] for a in ctx.readlines()]
 
 for line in lines:
+    if '<module>' not in line:
+        continue  # Only count top-level functions
     time = line.split(' ')[-1]
     if ':' in time:
         # time is in the format minutes:seconds
