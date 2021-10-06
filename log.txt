@@ -1,6 +1,0 @@
-13:36:36- Function load_wm, called by load_data, executed in 21.389s
-13:36:36- Function butter_bandpass, called by butter_bandpass_filter, executed in 0.056s
-13:39:30- Function butter_bandpass_filter, called by load_data, executed in 2:53
-13:42:46- Function load_data, called by <module>, executed in 6:31
-13:45:16- Function load_wm, called by load_data, executed in 1:03
-13:45:16- Function butter_bandpass, called by butter_bandpass_filter, executed in 0.007s
