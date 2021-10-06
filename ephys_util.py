@@ -273,7 +273,7 @@ def get_spikes(data_ephys, threshold = 4):
 
     # In the event there are no spikes in a channel, the start and end will be the same number, so a view into
     # an empty ndarray is returned
-    return [spike_locations_2d[1][start, end] for start, end in zip(abscissa_start, abscissa_end)]
+    return [spike_locations_2d[1][start:end] for start, end in zip(abscissa_start, abscissa_end)]
 
 
 @timed
