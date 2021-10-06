@@ -246,17 +246,14 @@ def get_spikes(data_ephys, threshold = 4):
     """
     spikes = []
 
+    # Calculate the threshold for every channel at the same time:
+    chan_thresholds = np.mean(data_ephys, axis=1) - np.std(data_ephys, axis=1) * threshold
+
     for channel in range(data_ephys.shape[0]):
+        spike_locations = np.flatnonzero(np.diff(data_ephys[channel] < chan_thresholds[channel]) == -1)
+        spikes.append(spike_locations)
 
-        #index data from a single channels
-        signal = data_ephys[channel]
-
-        #compute
-        thresh = np.mean(signal)-(np.std(signal)*threshold)
-
-        spikes.append(np.where(np.diff((signal < thresh).astype('int')) == -1)[0])
-
-    return np.array(spikes, dtype=object)
+    return spikes
 
 @timed
 def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500, n_channels=64):
