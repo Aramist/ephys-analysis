@@ -195,8 +195,7 @@ def load_data(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
 
         #search the exp directory for the physiology and analog data
     wm_file = glob(os.path.join(exp_dir, '*.bin'))[0]
-    # analog_file = glob(os.path.join(exp_dir, '*.h5'))[0]
-    analog_file = None
+    analog_file = glob(os.path.join(exp_dir, '*.h5'))[0]
 
     #load white matter data and check for bandpass argument...may take a while
     if phys_bandpass == False:
@@ -260,7 +259,10 @@ def get_spikes(data_ephys, threshold = 4):
     @timed
     def get_spike_loc():
         # The threshold comparison can also be done all at once:
-        return np.nonzero(np.diff(data_ephys < chan_thresholds.reshape((data_ephys.shape[0], 1)), axis=1) == -1)
+        # Similar to my rising edge detector, looks for places where
+        # arr[i] = False and arr[i+1] = True
+        mask = data_ephys < chan_thresholds.reshape((data_ephys.shape[0], 1))
+        return np.nonzero(~(mask[:,:-1]) & (mask[:,1:]))
     spike_locations_2d = get_spike_loc()
 
     @timed
