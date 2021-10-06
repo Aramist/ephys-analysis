@@ -244,16 +244,37 @@ def get_spikes(data_ephys, threshold = 4):
         (N_channels, N_spikes) array where values in N_spikes == spike times (in units of samples)
 
     """
-    spikes = []
 
-    # Calculate the threshold for every channel at the same time:
-    chan_thresholds = np.mean(data_ephys, axis=1) - np.std(data_ephys, axis=1) * threshold
+    # Everything is broken up into subfunctions to get their individual runtimes
 
-    for channel in range(data_ephys.shape[0]):
-        spike_locations = np.flatnonzero(np.diff(data_ephys[channel] < chan_thresholds[channel]) == -1)
-        spikes.append(spike_locations)
+    @timed
+    def make_thresholds():
+        # Calculate the threshold for every channel at the same time
+        return np.mean(data_ephys, axis=1) - np.std(data_ephys, axis=1) * threshold
 
-    return spikes
+    chan_thresholds = make_thresholds()
+
+    @timed
+    def get_spike_loc():
+        # The threshold comparison can also be done all at once:
+        return np.nonzero(np.diff(data_ephys < chan_thresholds.reshape((data_ephys.shape[0], 1)), axis=1) == -1)
+    spike_locations_2d = get_spike_loc()
+
+    @timed
+    def index_search():
+        # The index search can alse be done all at once:
+        ''' Spike_locations_2d[0] is an ndarray containing the 0-dim (channel number) for each spike.
+        spike_locations_2d[1] has the 1-dim (index number within the channel'''
+        abscissa_start = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='left')
+        abscissa_end = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='right')
+        return abscissa_start, abscissa_end
+
+    abscissa_start, abscissa_end = index_search()
+
+    # In the event there are no spikes in a channel, the start and end will be the same number, so a view into
+    # an empty ndarray is returned
+    return [spike_locations_2d[1][start, end] for start, end in zip(abscissa_start, abscissa_end)]
+
 
 @timed
 def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500, n_channels=64):
