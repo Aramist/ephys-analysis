@@ -111,7 +111,7 @@ def load_wm(filename):
     #parse filename to get sampling rate
     sr = int(filename.split('_')[-1][:-7])
 
-    return sr, np.ascontiguousarray(data)
+    return sr, data
 
 
 @timed
