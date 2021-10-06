@@ -385,7 +385,7 @@ def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
 
     # all_spikes: list of n_onsets lists of 64 ndarrays of dim (n_spikes)
     # basically (n_onsets, 64, n_spikes)
-    # want to reshape to (64, n_onsets, n_spikes)
+    # want to transpose to (64, n_onsets, n_spikes)
     reshaped_data = list()
     for i in range(n_channels):
         element = [onset_trunc_spikes[i] for onset_trunc_spikes in all_spikes]  # len 'n_onsets' list of ndarrays (n_spikes,)
@@ -397,52 +397,60 @@ def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
         # ch = np.vstack(all_spikes)[:,i]  # I believe this returns a matrix of spike locations for a single channel across all presentations
         ch = reshaped_data[i]
 
-        plt.figure(figsize=(12,10))
+        @timed
+        def make_plots():
+            plt.figure(figsize=(12,10))
 
-        plt.subplot(411)
-        plt.specgram(audio, NFFT=512, noverlap=256, Fs=sr_audio,
-                     xextent=(pad,total_dur-pad), cmap='magma');
-        plt.axis('off')
-        plt.xlim(0, total_dur)
-
-
-        plt.subplot(412)
-        plt.plot(np.arange(pad*sr_audio, (pad+dur)*sr_audio), audio, 'k')
-        plt.axis('off')
-        plt.xlim(0, total_dur*sr_audio)
-        sns.despine(bottom=True, right=True);
+            plt.subplot(411)
+            plt.specgram(audio, NFFT=512, noverlap=256, Fs=sr_audio,
+                         xextent=(pad,total_dur-pad), cmap='magma');
+            plt.axis('off')
+            plt.xlim(0, total_dur)
 
 
-        plt.subplot(413)
-
-        n, bins, patches = plt.hist(np.hstack(ch), range=(0, total_dur*sr_phys),
-                                     bins=int(len(audio)/int(hist_binsize*sr_audio)),
-                                    histtype='step', color='k')
-        psth_traces.append(np.array([n, bins], dtype=object))
-
-        plt.xticks([])
-        plt.ylabel('counts \n ({} s bin)'.format(hist_binsize), rotation=0, labelpad=40, fontsize=14)
-        plt.xlim(0, total_dur*sr_phys)
-        sns.despine(bottom=True, right=True);
+            plt.subplot(412)
+            plt.plot(np.arange(pad*sr_audio, (pad+dur)*sr_audio), audio, 'k')
+            plt.axis('off')
+            plt.xlim(0, total_dur*sr_audio)
+            sns.despine(bottom=True, right=True);
 
 
-        plt.subplot(414)
-        for j in range(len(ch)):
-                plt.plot(ch[j], [j]*len(ch[j]), '|k')
+            plt.subplot(413)
 
-        plt.xticks(np.arange(0, total_dur*sr_phys, int(sr_phys*.5)),
-                    np.arange(0, total_dur*sr_phys, int(sr_phys*.5))/sr_phys)
+            n, bins, patches = plt.hist(np.hstack(ch), range=(0, total_dur*sr_phys),
+                                         bins=int(len(audio)/int(hist_binsize*sr_audio)),
+                                        histtype='step', color='k')
+            psth_traces.append(np.array([n, bins], dtype=object))
 
-        plt.xlabel('time (s)')
-        plt.ylabel('sound trial', rotation=0, labelpad=40, fontsize=14)
-        plt.xlim(0, total_dur*sr_phys)
+            plt.xticks([])
+            plt.ylabel('counts \n ({} s bin)'.format(hist_binsize), rotation=0, labelpad=40, fontsize=14)
+            plt.xlim(0, total_dur*sr_phys)
+            sns.despine(bottom=True, right=True);
 
-        sns.despine()
-        plt.title('Channel {}'.format(i+1))
 
-        if save_fig == True:
+            plt.subplot(414)
+            for j in range(len(ch)):
+                    plt.plot(ch[j], [j]*len(ch[j]), '|k')
 
-            plt.savefig(os.path.join(savedir, 'channel{}{}.png'.format(i+1, outname)), dpi=300, transparent=False)
+            plt.xticks(np.arange(0, total_dur*sr_phys, int(sr_phys*.5)),
+                        np.arange(0, total_dur*sr_phys, int(sr_phys*.5))/sr_phys)
+
+            plt.xlabel('time (s)')
+            plt.ylabel('sound trial', rotation=0, labelpad=40, fontsize=14)
+            plt.xlim(0, total_dur*sr_phys)
+
+            sns.despine()
+            plt.title('Channel {}'.format(i+1))
+
+        make_plots()
+
+        @timed
+        def io_save_fig():
+            if save_fig == True:
+
+                plt.savefig(os.path.join(savedir, 'channel{}{}.png'.format(i+1, outname)), dpi=300, transparent=False)
+
+        io_save_fig()
 
         if hide_plot == True:
             plt.close()
