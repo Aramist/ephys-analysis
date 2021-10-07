@@ -11,51 +11,6 @@ from scipy.signal import butter, sosfilt, sosfreqz
 import seaborn as sns
 
 
-
-def log(line):
-    with open('log.txt', 'a') as log_ctx:
-        log_ctx.write(str(line) + '\n')
-
-
-def timed(fn):
-    def wrapper(*args, **kwargs):
-        _current_frame = inspect.currentframe()
-        _caller_frame = inspect.getouterframes(_current_frame, 2)
-        calling_function = _caller_frame[1][3]
-
-        start = time.time()
-        results = fn(*args, **kwargs)
-        end = time.time()
-        duration = end - start
-
-        end_time_str = time.strftime('%H:%M:%S')
-
-        duration_minutes = duration // 60
-        duration_seconds = duration - duration_minutes * 60
-        if duration_minutes > 0:
-            fmt = '{}- Function {}, called by {}, executed in {}:{:0>2d}'
-            fmt = fmt.format(
-                    end_time_str,
-                    fn.__name__,
-                    calling_function,
-                    int(duration_minutes),
-                    int(duration_seconds)
-            )
-        else:
-            fmt = '{}- Function {}, called by {}, executed in {:.3f}s'
-            fmt = fmt.format(
-                    end_time_str,
-                    fn.__name__,
-                    calling_function,
-                    duration_seconds
-            )
-        log(fmt)
-        print(fmt)
-        return results
-    return wrapper
-
-
-@timed
 def butter_bandpass(lowcut, highcut, fs, order=5):
     """
     From https://scipy-cookbook.readthedocs.io/items/ButterworthBandpass.html
@@ -70,7 +25,6 @@ def butter_bandpass(lowcut, highcut, fs, order=5):
     return sos
 
 
-@timed
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5, axis=1):
     """
     From https://scipy-cookbook.readthedocs.io/items/ButterworthBandpass.html
@@ -79,7 +33,6 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5, axis=1):
     y = sosfilt(sos, data, axis=axis)
     return y
 
-@timed
 def load_wm(filename):
     """
     Load .bin file from white matter electophysiology system.
@@ -98,11 +51,8 @@ def load_wm(filename):
     #parse filename to get number of channels
     n_channels = int(filename.split('_')[-2][:-2])
 
-    @timed
-    def io_fromfile():
-        #load in binary data
-        return np.fromfile(filename,'int16', offset=8)
-    _data = io_fromfile()
+    #load in binary data
+    _data = np.fromfile(filename,'int16', offset=8)
 
     #reshape data to (n_channels, n_samples) and scale values to MICROVOLTS
     # Transpose to row-major indexing
@@ -114,7 +64,6 @@ def load_wm(filename):
     return sr, data
 
 
-@timed
 def truncate_audio(analog_file, data_phys, combine_audio = False):
 
     """
@@ -183,7 +132,6 @@ def truncate_audio(analog_file, data_phys, combine_audio = False):
     data_analog.close()
 
 
-@timed
 def load_data(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
     """
         Parameters:
@@ -229,7 +177,6 @@ def load_data(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
     return sr_phys, data_phys, data_audio, ephys_trigger_rising_edge
 
 
-@timed
 def get_spikes(data_ephys, threshold = 4):
 
     """
@@ -249,39 +196,26 @@ def get_spikes(data_ephys, threshold = 4):
 
     # Everything is broken up into subfunctions to get their individual runtimes
 
-    @timed
-    def make_thresholds():
-        # Calculate the threshold for every channel at the same time
-        return np.mean(data_ephys, axis=1) - np.std(data_ephys, axis=1) * threshold
+    # Calculate the threshold for every channel at the same time
+    chan_thresholds = np.mean(data_ephys, axis=1) - np.std(data_ephys, axis=1) * threshold
 
-    chan_thresholds = make_thresholds()
+    # The threshold comparison can also be done all at once:
+    # Similar to my rising edge detector, looks for places where
+    # arr[i] = False and arr[i+1] = True
+    mask = data_ephys < chan_thresholds.reshape((data_ephys.shape[0], 1))
+    spike_locations_2d = np.nonzero(~(mask[:,:-1]) & (mask[:,1:]))
 
-    @timed
-    def get_spike_loc():
-        # The threshold comparison can also be done all at once:
-        # Similar to my rising edge detector, looks for places where
-        # arr[i] = False and arr[i+1] = True
-        mask = data_ephys < chan_thresholds.reshape((data_ephys.shape[0], 1))
-        return np.nonzero(~(mask[:,:-1]) & (mask[:,1:]))
-    spike_locations_2d = get_spike_loc()
-
-    @timed
-    def index_search():
-        # The index search can alse be done all at once:
-        ''' Spike_locations_2d[0] is an ndarray containing the 0-dim (channel number) for each spike.
-        spike_locations_2d[1] has the 1-dim (index number within the channel'''
-        abscissa_start = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='left')
-        abscissa_end = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='right')
-        return abscissa_start, abscissa_end
-
-    abscissa_start, abscissa_end = index_search()
+    # The index search can alse be done all at once:
+    ''' Spike_locations_2d[0] is an ndarray containing the 0-dim (channel number) for each spike.
+    spike_locations_2d[1] has the 1-dim (index number within the channel'''
+    abscissa_start = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='left')
+    abscissa_end = spike_locations_2d[0].searchsorted(np.arange(data_ephys.shape[0]), side='right')
 
     # In the event there are no spikes in a channel, the start and end will be the same number, so a view into
     # an empty ndarray is returned
     return [spike_locations_2d[1][start:end] for start, end in zip(abscissa_start, abscissa_end)]
 
 
-@timed
 def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phys=12500, n_channels=64):
 
     """
@@ -313,7 +247,6 @@ def truncate_spikes(spikes, onset, offset, ephys_trigger,sr_audio=125000, sr_phy
     # TODO: next benchmark, replace obj ndarray with list of ndarray
     return spikes_trunc
 
-@timed
 def psth(spikes,data_audio, onset_s, offset_s, ephys_trigger,
     pad = 1, hist_binsize=0.05, sr_audio=125000, sr_phys=12500, spec_clim=(-100,-70)):
 
@@ -374,7 +307,6 @@ def psth(spikes,data_audio, onset_s, offset_s, ephys_trigger,
     plt.tight_layout()
 
 
-@timed
 def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
                  pad = 1, hist_binsize=0.05, sr_audio=125000,
                  sr_phys=12500, n_channels=64, save_fig=False,
@@ -420,76 +352,62 @@ def psth_channel(spikes, audio, onset_s_array, ephys_trigger,
         # ch = np.vstack(all_spikes)[:,i]  # I believe this returns a matrix of spike locations for a single channel across all presentations
         ch = reshaped_data[i]
 
-        @timed
-        def make_plots():
-            plt.figure(figsize=(12,10))
+        plt.figure(figsize=(12,10))
 
-            plt.subplot(411)
-            plt.specgram(audio, NFFT=512, noverlap=256, Fs=sr_audio,
-                         xextent=(pad,total_dur-pad), cmap='magma');
-            plt.axis('off')
-            plt.xlim(0, total_dur)
+        plt.subplot(411)
+        plt.specgram(audio, NFFT=512, noverlap=256, Fs=sr_audio,
+                     xextent=(pad,total_dur-pad), cmap='magma');
+        plt.axis('off')
+        plt.xlim(0, total_dur)
 
 
-            plt.subplot(412)
-            plt.plot(np.arange(pad*sr_audio, (pad+dur)*sr_audio), audio, 'k')
-            plt.axis('off')
-            plt.xlim(0, total_dur*sr_audio)
-            sns.despine(bottom=True, right=True);
+        plt.subplot(412)
+        plt.plot(np.arange(pad*sr_audio, (pad+dur)*sr_audio), audio, 'k')
+        plt.axis('off')
+        plt.xlim(0, total_dur*sr_audio)
+        sns.despine(bottom=True, right=True);
 
 
-            plt.subplot(413)
+        plt.subplot(413)
 
-            n, bins, patches = plt.hist(np.hstack(ch), range=(0, total_dur*sr_phys),
-                                         bins=int(len(audio)/int(hist_binsize*sr_audio)),
-                                        histtype='step', color='k')
-            psth_traces.append(np.array([n, bins], dtype=object))
+        n, bins, patches = plt.hist(np.hstack(ch), range=(0, total_dur*sr_phys),
+                                     bins=int(len(audio)/int(hist_binsize*sr_audio)),
+                                    histtype='step', color='k')
+        psth_traces.append(np.array([n, bins], dtype=object))
 
-            plt.xticks([])
-            plt.ylabel('counts \n ({} s bin)'.format(hist_binsize), rotation=0, labelpad=40, fontsize=14)
-            plt.xlim(0, total_dur*sr_phys)
-            sns.despine(bottom=True, right=True);
+        plt.xticks([])
+        plt.ylabel('counts \n ({} s bin)'.format(hist_binsize), rotation=0, labelpad=40, fontsize=14)
+        plt.xlim(0, total_dur*sr_phys)
+        sns.despine(bottom=True, right=True);
 
 
-            plt.subplot(414)
-            for j in range(len(ch)):
-                    plt.plot(ch[j], [j]*len(ch[j]), '|k')
+        plt.subplot(414)
+        for j in range(len(ch)):
+                plt.plot(ch[j], [j]*len(ch[j]), '|k')
 
-            plt.xticks(np.arange(0, total_dur*sr_phys, int(sr_phys*.5)),
-                        np.arange(0, total_dur*sr_phys, int(sr_phys*.5))/sr_phys)
+        plt.xticks(np.arange(0, total_dur*sr_phys, int(sr_phys*.5)),
+                    np.arange(0, total_dur*sr_phys, int(sr_phys*.5))/sr_phys)
 
-            plt.xlabel('time (s)')
-            plt.ylabel('sound trial', rotation=0, labelpad=40, fontsize=14)
-            plt.xlim(0, total_dur*sr_phys)
+        plt.xlabel('time (s)')
+        plt.ylabel('sound trial', rotation=0, labelpad=40, fontsize=14)
+        plt.xlim(0, total_dur*sr_phys)
 
-            sns.despine()
-            plt.title('Channel {}'.format(i+1))
+        sns.despine()
+        plt.title('Channel {}'.format(i+1))
 
-        make_plots()
-
-        @timed
-        def io_save_fig():
-            if save_fig == True:
-
-                plt.savefig(os.path.join(savedir, 'channel{}{}.png'.format(i+1, outname)), dpi=300, transparent=False)
-
-        io_save_fig()
+        if save_fig == True:
+            plt.savefig(os.path.join(savedir, 'channel{}{}.png'.format(i+1, outname)), dpi=300, transparent=False)
 
         if hide_plot == True:
             plt.close()
 
-    @timed
-    def io_save_psth_traces():
-        np.save(os.path.join(savedir, 'psth_traces{}.npy'.format(outname)), np.array(psth_traces))
-    io_save_psth_traces()
+    np.save(os.path.join(savedir, 'psth_traces{}.npy'.format(outname)), np.array(psth_traces))
 
 
-@timed
 def rms(signal):
     rms = np.sqrt(np.mean(signal**2))
     return rms
 
-@timed
 def get_onsets(time_of_first_stim, time_between_stim, n_stim, stim_dur):
 
     """
@@ -520,7 +438,6 @@ def get_onsets(time_of_first_stim, time_between_stim, n_stim, stim_dur):
     return onsets
 
 
-@timed
 def load_data_new(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
 
     """
@@ -565,7 +482,6 @@ def load_data_new(exp_dir, phys_bandpass=(200, 2000), combine_audio=True):
     return sr_phys, data_phys, data_audio, ephys_trigger_rising_edge
 
 
-@timed
 def truncate_audio_new(analog_file, data_phys, combine_audio = False):
 
     """
@@ -610,16 +526,11 @@ def truncate_audio_new(analog_file, data_phys, combine_audio = False):
     end_trunc = (len(data_phys)*sampling_rate_ratio)
 
     _mic1 = data_analog['ai_channels']['ai0']
-    @timed
-    def io_mic1():
-        return _mic1[ephys_trigger:ephys_trigger+end_trunc]
-    mic1 = io_mic1()
+
+    mic1 =  _mic1[ephys_trigger:ephys_trigger+end_trunc]
 
     _mic2 = data_analog['ai_channels']['ai1']
-    @timed
-    def io_mic2():
-        return _mic2[ephys_trigger:ephys_trigger+end_trunc]
-    mic2 = io_mic2()
+    mic2 = _mic2[ephys_trigger:ephys_trigger+end_trunc]
 
     data_analog.close()
 
@@ -631,7 +542,6 @@ def truncate_audio_new(analog_file, data_phys, combine_audio = False):
         return np.stack((mic1, mic2), axis=0), ephys_trigger
 
 
-@timed
 def h5_to_wav(dirname,  sr_audio=125000, mic_number=1):
     fns = glob(os.path.join(dirname, '*.h5'))
 
